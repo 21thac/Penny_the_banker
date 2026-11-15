@@ -72,7 +72,12 @@ async function call(payload, { url, code } = getSync(), seconds = 60) {
       signal: ctl.signal,
     });
   } catch (err) {
-    throw new SyncError(err?.name === 'AbortError' ? 'The Sheet took too long to answer.' : "Couldn't reach the Sheet. Check your connection.");
+    if (err?.name === 'AbortError') throw new SyncError('The Sheet took too long to answer.');
+    if (navigator.onLine === false) throw new SyncError("You're offline. Sync will run when the connection is back.");
+    // Online but refused: Google answered with a sign-in or error page.
+    throw new SyncError(
+      'Google refused the request. In Apps Script open Deploy, then Manage deployments, and check that "Who has access" is set to Anyone and that you allowed access when asked.',
+    );
   } finally {
     clearTimeout(timer);
   }
@@ -216,6 +221,17 @@ export async function connect(url, code) {
   code = code.trim();
   if (!/^https:\/\//.test(url)) throw new SyncError('Paste the Web app URL. It starts with https://');
   if (!code) throw new SyncError('Enter the sync code.');
+  // Remember what was typed, so a failed attempt doesn't have to be retyped.
+  save({ url, code, on: false });
+  if (!/^https:\/\/script\.google\.com\/(a\/macros\/[^/]+|macros)\/s\/[^/]+\/exec$/.test(url)) {
+    throw new SyncError(
+      /docs\.google\.com/.test(url)
+        ? "That is the Sheet's own address. Paste the Web app URL from Deploy, which starts with https://script.google.com/macros/s/ and ends with /exec."
+        : /\/dev$/.test(url)
+          ? 'That is the test address (it ends with /dev). Use the Web app URL from Deploy, which ends with /exec.'
+          : 'That does not look like a Web app URL. It should start with https://script.google.com/macros/s/ and end with /exec.',
+    );
+  }
   const ping = await call({ action: 'ping' }, { url, code }, 30);
   const sheetHasData = ping.records > 0;
   const replace = sheetHasData && !hasOwnData();
