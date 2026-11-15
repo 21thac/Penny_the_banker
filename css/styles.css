@@ -601,10 +601,67 @@ body.sheet-open .say {
   padding: 2px 12px;
 }
 
-.month-label small {
-  font-size: calc(12px * var(--k));
-  font-weight: var(--fw-strong);
-  color: var(--accent-deep);
+.month-label span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.month-label svg {
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+}
+
+/* Month picker */
+
+.mp-year {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.mp-year-label {
+  font-size: calc(22px * var(--k));
+}
+
+.mp-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.mp-month {
+  position: relative;
+  height: 52px;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  box-shadow: var(--sh-sm);
+  font-size: calc(15px * var(--k));
+  text-transform: lowercase;
+  letter-spacing: 0.04em;
+}
+
+.mp-month.has::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 7px;
+  width: 5px;
+  height: 5px;
+  margin-left: -2.5px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.mp-month.now {
+  box-shadow: var(--sh-sm), 0 0 0 2px var(--line);
+}
+
+.mp-month.on {
+  background: var(--ink);
+  color: var(--bg);
 }
 
 .hero {
