@@ -6,6 +6,7 @@ import { getState, liveEntries } from './store.js';
 import { monthSummary } from './budget.js';
 import { overview, yearProgress } from './wealth.js';
 import { todayStr, monthKey, money } from './util.js';
+import { monthlyStatus } from './recurring.js';
 
 const m = (n) => money(n, getState().settings.currency);
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
@@ -20,6 +21,10 @@ const LINES = {
     () => {
       const s = monthSummary(monthKey(todayStr()));
       return s.salary && s.left > 0 ? `${m(s.perDay)} a day keeps you on budget.` : null;
+    },
+    () => {
+      const due = monthlyStatus(monthKey(todayStr())).filter((s) => s.state === 'due').length;
+      return due ? `${due} monthly ${due === 1 ? 'item is' : 'items are'} due. Tap Log once paid.` : null;
     },
     'Small spends add up. Log the little ones too!',
     'Double-tap + and just tell me what you spent.',

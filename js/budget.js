@@ -9,6 +9,27 @@ export const GROUPS = [
   { id: 'wants', name: 'Wants', hint: 'Nice-to-haves you choose' },
 ];
 
+// Where a category stands against its monthly limit.
+// extra: an amount being typed that is not saved yet. minus: an amount already
+// counted that should be left out (the entry being edited).
+export function categoryUsage(categoryId, month, extra = 0, minus = 0) {
+  const limit = Number(categoryById(categoryId)?.limit) || 0;
+  const spent = round2((monthSummary(month).byCat.get(categoryId) || 0) - minus);
+  const used = round2(spent + extra);
+  return { limit, spent, used, share: limit > 0 ? used / limit : 0 };
+}
+
+// The colour step for the ring around a category in the entry sheet.
+// share is how much of the limit is used: 0.49 means 49%, 1.2 means 120%.
+// Return one of: 'good' (green), 'caution' (yellow), 'warn' (orange), 'over' (red).
+export function limitTone(share) {
+  // Checked from the top down: red from 90%, orange from 70%, yellow from 50%.
+  if (share >= 0.9) return 'over';
+  if (share >= 0.7) return 'warn';
+  if (share >= 0.5) return 'caution';
+  return 'good';
+}
+
 export const DEFAULT_SPLIT = { needs: 50, wants: 30, savings: 20 };
 
 // Salary is remembered from the month it was set, so a pay change does not

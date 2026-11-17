@@ -851,6 +851,27 @@ body.sheet-open .say {
   font-size: calc(15px * var(--k));
 }
 
+.due-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px 10px 16px;
+}
+
+.due-row .chip {
+  height: 34px;
+  padding: 0 14px;
+  flex: none;
+}
+
+.mi-list {
+  margin-top: 14px;
+}
+
+.mi-row {
+  width: 100%;
+}
+
 /* ---------- Budget ---------- */
 
 .bar {
@@ -2258,6 +2279,143 @@ body.sheet-open .say {
   transition: none;
   cursor: grabbing;
   filter: drop-shadow(0 6px 10px rgba(74, 73, 71, 0.2));
+}
+
+/* Ring around the chosen category: how much of its limit is used. */
+.cat .bubble {
+  position: relative;
+}
+
+.bubble .limit-ring {
+  position: absolute;
+  inset: -6px;
+  width: calc(100% + 12px);
+  height: calc(100% + 12px);
+  fill: none;
+  stroke-width: 3;
+  pointer-events: none;
+}
+
+.limit-ring .lr-track { stroke: var(--fill); }
+.limit-ring .lr-fill { stroke-linecap: round; transition: stroke-dasharray 0.3s ease, stroke 0.3s ease; }
+.limit-ring.tone-good .lr-fill { stroke: #6f9a63; }
+.limit-ring.tone-caution .lr-fill { stroke: #d9b22e; }
+.limit-ring.tone-warn .lr-fill { stroke: #dd7f3a; }
+.limit-ring.tone-over .lr-fill { stroke: var(--danger); }
+
+/* Penny's note in the entry sheet: same look as her bubble on Home. */
+.es-head {
+  position: relative;
+}
+
+.es-say {
+  position: absolute;
+  top: 54px;
+  right: 12px;
+  max-width: min(260px, calc(100% - 24px));
+  padding: 10px 14px;
+  border-radius: 18px 4px 18px 18px;
+  background: var(--ink);
+  color: var(--bg);
+  font-family: var(--font);
+  font-size: calc(13px * var(--k));
+  line-height: 1.35;
+  letter-spacing: 0;
+  text-transform: none;
+  text-align: left;
+  box-shadow: var(--sh);
+  z-index: 5;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-6px) scale(0.6);
+  transform-origin: 100% 0;
+  transition: opacity 0.25s ease, transform 0.25s ease, visibility 0s 0.25s;
+}
+
+.es-say.show {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition: opacity 0.2s ease, transform 0.45s cubic-bezier(0.2, 1.6, 0.4, 1), visibility 0s;
+}
+
+.mini.wave .mascot {
+  transform-origin: 50% 100%;
+  animation: waddle 1.3s ease-in-out;
+}
+
+/* Favourites take the place of the category grid. */
+.cat-grid.favs {
+  display: block;
+  height: 172px;
+  overflow-y: auto;
+}
+
+.fav-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.fav-actions .chip {
+  flex: 1;
+  justify-content: center;
+  height: 34px;
+  padding: 0 8px;
+  font-size: calc(13px * var(--k));
+  white-space: nowrap;
+}
+
+.fav-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 6px;
+  background: var(--surface);
+  border-radius: var(--r-sm);
+  box-shadow: var(--sh-sm);
+}
+
+.fav-use {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px 6px 8px;
+  text-align: left;
+}
+
+.fav-use .bubble {
+  width: 34px;
+  height: 34px;
+}
+
+.fav-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fav-amt {
+  white-space: nowrap;
+}
+
+.fav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.fav-link svg {
+  width: 15px;
+  height: 15px;
+}
+
+.cat-foot .link {
+  white-space: nowrap;
 }
 
 /* Two rows at a time; swipe sideways for more. */

@@ -9,6 +9,7 @@ import { dailyTotals } from '../insights.js';
 import { bars } from '../charts.js';
 import { openEntrySheet } from './add.js';
 import { bubble } from '../art.js';
+import { monthlyCard } from './monthly.js';
 import {
   esc,
   todayStr,
@@ -159,7 +160,11 @@ export function renderHome() {
 
     ${miniChart}
 
+    ${monthlyCard()}
+
     ${list}
+
+    <button class="link see-all" data-action="monthly-manage">Monthly items</button>
   `;
 }
 

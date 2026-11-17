@@ -4,7 +4,7 @@
 // back to the saved copy when offline. Fonts: use the saved copy first, since
 // they never change. Requests to other services (AI, sync) are left alone.
 
-const CACHE = 'ledger-v1';
+const CACHE = 'ledger-v2';
 
 const SHELL = [
   './',
@@ -27,6 +27,7 @@ const SHELL = [
   './js/insights.js',
   './js/month.js',
   './js/photos.js',
+  './js/recurring.js',
   './js/store.js',
   './js/sync-script.js',
   './js/sync.js',
@@ -38,6 +39,7 @@ const SHELL = [
   './js/views/goals.js',
   './js/views/home.js',
   './js/views/insights.js',
+  './js/views/monthly.js',
   './js/views/settings.js',
   './js/views/summary.js',
   './js/wealth.js',

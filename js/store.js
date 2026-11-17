@@ -145,7 +145,7 @@ export const categoriesOf = (type) =>
 
 // ---- Entries ----
 
-export function addEntry({ type, amount, categoryId, date, note, photoId = null }) {
+export function addEntry({ type, amount, categoryId, date, note, photoId = null, recurringId = null }) {
   const now = Date.now();
   const entry = {
     id: uid(),
@@ -155,6 +155,7 @@ export function addEntry({ type, amount, categoryId, date, note, photoId = null 
     date,
     note: note || '',
     photoId, // id of an attached photo in photos.js, if any
+    recurringId, // the monthly item this entry was logged from, if any
     createdAt: now,
     updatedAt: now,
     deleted: false,

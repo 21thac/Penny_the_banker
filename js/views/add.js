@@ -12,12 +12,15 @@ import {
   reorderCategories,
 } from '../store.js';
 import { openSheet, closeSheet, toast } from '../ui.js';
-import { mascot, icon } from '../art.js';
+import { mascot, icon, bubble } from '../art.js';
 import { openCategorySheet } from './settings.js';
 import { prepareImage } from '../ai.js';
 import { putPhoto, deletePhoto } from '../photos.js';
 import { loadPhoto } from '../sync.js';
-import { uid } from '../util.js';
+import { uid, monthKey } from '../util.js';
+import { categoryUsage, limitTone, monthSummary } from '../budget.js';
+import { saveMonthly } from '../recurring.js';
+import { setSetting } from '../store.js';
 import {
   esc,
   todayStr,
@@ -49,6 +52,7 @@ export function openEntrySheet(existing = null, carry = null, editCats = false) 
   const today = todayStr();
 
   let editing = editCats;
+  let showFav = false; // the favourites list takes the place of the category grid
   const draft = carry
     ? { ...carry }
     : existing
@@ -85,8 +89,9 @@ export function openEntrySheet(existing = null, carry = null, editCats = false) 
           ? `<button class="icon-btn danger" data-es="delete" aria-label="Delete entry">
                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/></svg>
              </button>`
-          : `<button class="mini" data-action="assistant" aria-label="Ask Penny to fill this in">${mascot()}</button>`
+          : `<button class="mini es-penny" aria-label="Ask Penny how this category is doing">${mascot()}</button>`
       }
+      <div class="es-say" aria-live="polite"></div>
     </div>
 
     <div class="es-body">
@@ -183,7 +188,9 @@ export function openEntrySheet(existing = null, carry = null, editCats = false) 
     const current = categoryById(draft.categoryId);
     if (current && current.archived && current.type === draft.type) cats.push(current);
     grid.classList.toggle('editing', editing);
-    grid.classList.toggle('paged', !editing);
+    grid.classList.toggle('paged', !editing && !showFav);
+    grid.classList.toggle('favs', showFav);
+    if (showFav) return paintFavs();
     const tile = (c) => `
         <button class="cat ${c.id === draft.categoryId && !editing ? 'on' : ''}" data-cat="${c.id}" style="--c:${esc(c.color)}"
                 ${editing ? `aria-label="Edit ${esc(c.name)}"` : ''}>
@@ -224,6 +231,9 @@ export function openEntrySheet(existing = null, carry = null, editCats = false) 
                </button>`
             : ''
         }</span>
+        <button class="link fav-link" data-fav="toggle">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/></svg>Favourites
+        </button>
         <button class="link" data-cat-tool="add">Add</button>
         <button class="link" data-cat-tool="edit">Edit</button>`;
       // Start on the page that holds the selected category.
@@ -232,6 +242,181 @@ export function openEntrySheet(existing = null, carry = null, editCats = false) 
       paintDots();
     }
     catHint.hidden = !editing;
+    paintRing();
+  }
+
+  // ---- Limit ring ----
+  // A ring around the chosen category shows how much of its monthly limit is
+  // used, counting the amount being typed. Its colour comes from limitTone().
+
+  // Usage of the chosen category in the month of the entry's date. When
+  // editing, the entry's own saved amount is left out so it is not counted twice.
+  function usage(includeTyped = true) {
+    const month = monthKey(draft.date);
+    const typed = includeTyped ? round2(parseFloat(draft.amountStr)) || 0 : 0;
+    const own =
+      existing && existing.type === 'expense' && existing.categoryId === draft.categoryId && monthKey(existing.date) === month
+        ? existing.amount
+        : 0;
+    return categoryUsage(draft.categoryId, month, typed, own);
+  }
+
+  function paintRing() {
+    grid.querySelectorAll('.limit-ring').forEach((r) => r.remove());
+    if (editing || showFav || draft.type !== 'expense') return;
+    const bubbleEl = grid.querySelector('.cat.on .bubble');
+    const u = usage();
+    if (!bubbleEl || !(u.limit > 0)) return;
+    const around = 2 * Math.PI * 22;
+    const filled = Math.max(0, Math.min(1, u.share)) * around;
+    bubbleEl.insertAdjacentHTML(
+      'beforeend',
+      `<svg class="limit-ring tone-${limitTone(u.share)}" viewBox="0 0 48 48" role="img"
+            aria-label="${Math.round(u.share * 100)}% of limit used">
+         <circle class="lr-track" cx="24" cy="24" r="22"/>
+         <circle class="lr-fill" cx="24" cy="24" r="22" transform="rotate(-90 24 24)"
+                 stroke-dasharray="${filled.toFixed(1)} ${around.toFixed(1)}"/>
+       </svg>`,
+    );
+  }
+
+  // ---- Penny's note ----
+  // Tapping Penny pops a short note about the chosen category.
+
+  function pennyLine() {
+    const m = (n) => money(n, currency);
+    const c = categoryById(draft.categoryId);
+    if (!c) return 'Pick a category and I can tell you how it is doing.';
+    if (draft.type === 'income') {
+      return `Extra income this month so far: ${m(monthSummary(monthKey(draft.date)).extras)}.`;
+    }
+    const before = usage(false);
+    const after = usage(true);
+    if (!(before.limit > 0)) {
+      return `${m(before.spent)} spent on ${c.name} this month. No limit is set for it yet.`;
+    }
+    const pct = (u) => `${Math.round(u.share * 100)}%`;
+    const base =
+      before.used > before.limit
+        ? `${c.name} is ${m(before.used - before.limit)} over its ${m(before.limit)} limit.`
+        : `${pct(before)} of your ${c.name} limit is used so far, with ${m(before.limit - before.used)} left.`;
+    return after.used > before.used ? `${base} This entry takes it to ${pct(after)}.` : base;
+  }
+
+  let sayTimer = null;
+  function pennySays(text) {
+    const bubbleEl = $('.es-say');
+    const penny = $('.es-penny');
+    bubbleEl.textContent = text;
+    bubbleEl.classList.remove('show');
+    penny?.classList.remove('wave');
+    void bubbleEl.offsetWidth; // restart the animations
+    bubbleEl.classList.add('show');
+    penny?.classList.add('wave');
+    clearTimeout(sayTimer);
+    sayTimer = setTimeout(() => bubbleEl.classList.remove('show'), 5000);
+  }
+
+  // ---- Favourites ----
+  // Routine entries saved for reuse. Kept in settings, so they sync.
+
+  const favourites = () => getState().settings.favourites || [];
+
+  function paintFavs() {
+    const favs = favourites();
+    grid.innerHTML = `
+      <div class="fav-actions">
+        <button class="chip" data-fav="save">Save as favourite</button>
+        <button class="chip" data-fav="monthly">Repeat monthly</button>
+      </div>
+      ${
+        favs.length
+          ? favs
+              .map((f) => {
+                const c = categoryById(f.categoryId);
+                return `
+          <div class="fav-row">
+            <button class="fav-use" data-fav-use="${f.id}">
+              ${bubble(c)}
+              <span class="fav-name">${esc(f.note || c?.name || 'Entry')}</span>
+              <span class="fav-amt">${f.type === 'income' ? '+' : ''}${money(f.amount, currency)}</span>
+            </button>
+            <button class="icon-btn sm" data-fav-del="${f.id}" aria-label="Remove this favourite">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+            </button>
+          </div>`;
+              })
+              .join('')
+          : '<p class="hint center">No favourites yet. Fill in an entry, then tap Save as favourite.</p>'
+      }`;
+    catFoot.innerHTML = '<span class="cat-dots"></span><button class="link" data-fav="toggle">Back to categories</button>';
+    catHint.hidden = true;
+  }
+
+  // The entry as typed so far, or null (with a shake) if it is not ready.
+  function typedEntry() {
+    const amount = round2(parseFloat(draft.amountStr));
+    if (!(amount > 0)) return shake(amountEl), null;
+    if (!draft.categoryId) return shake(grid), null;
+    return { type: draft.type, amount, categoryId: draft.categoryId, note: noteInput.value.trim() };
+  }
+
+  function favAction(e) {
+    const use = e.target.closest('[data-fav-use]');
+    if (use) {
+      const f = favourites().find((x) => x.id === use.dataset.favUse);
+      if (!f) return true;
+      const c = categoryById(f.categoryId);
+      draft.type = f.type;
+      draft.amountStr = String(f.amount);
+      if (c && !c.archived) draft.categoryId = f.categoryId;
+      noteInput.value = f.note || '';
+      showFav = false;
+      paintType();
+      paintAmount();
+      paintCats();
+      return true;
+    }
+    const del = e.target.closest('[data-fav-del]');
+    if (del) {
+      const before = favourites();
+      setSetting('favourites', before.filter((x) => x.id !== del.dataset.favDel));
+      paintFavs();
+      toast('Favourite removed', { action: 'Undo', onAction: () => setSetting('favourites', before) });
+      return true;
+    }
+    const act = e.target.closest('[data-fav]')?.dataset.fav;
+    if (!act) return false;
+    if (act === 'toggle') {
+      showFav = !showFav;
+      paintCats();
+    } else if (act === 'save') {
+      const entry = typedEntry();
+      if (!entry) return true;
+      const same = (f) => f.type === entry.type && f.categoryId === entry.categoryId && f.amount === entry.amount && (f.note || '') === entry.note;
+      if (favourites().some(same)) return toast('That is already a favourite'), true;
+      setSetting('favourites', [...favourites(), { id: uid(), ...entry }]);
+      paintFavs();
+      toast('Saved to favourites');
+    } else if (act === 'monthly') {
+      const entry = typedEntry();
+      if (!entry) return true;
+      const c = categoryById(entry.categoryId);
+      const item = saveMonthly({
+        name: entry.note || c?.name || 'Monthly item',
+        type: entry.type,
+        amount: entry.amount,
+        categoryId: entry.categoryId,
+        day: Number(draft.date.slice(8)),
+        from: monthKey(draft.date),
+      });
+      // Saving this entry counts as this month's payment for the new item.
+      draft.recurringId = item.id;
+      showFav = false;
+      paintCats();
+      toast(`${item.name} will come up on day ${item.day} each month for you to confirm`);
+    }
+    return true;
   }
 
   function paintDots() {
@@ -312,6 +497,7 @@ export function openEntrySheet(existing = null, carry = null, editCats = false) 
     }
     draft.amountStr = s;
     paintAmount();
+    paintRing();
   }
 
   // ---- Photo ----
@@ -387,6 +573,7 @@ export function openEntrySheet(existing = null, carry = null, editCats = false) 
       data.photoId = null;
       deletePhoto(oldPhoto);
     }
+    if (draft.recurringId) data.recurringId = draft.recurringId;
     if (existing) updateEntry(existing.id, data);
     else addEntry(data);
     closeSheet();
@@ -468,6 +655,9 @@ export function openEntrySheet(existing = null, carry = null, editCats = false) 
     const key = e.target.closest('[data-k]');
     if (key) return press(key.dataset.k);
 
+    if (e.target.closest('.es-penny')) return pennySays(pennyLine());
+    if (favAction(e)) return;
+
     const typeBtn = e.target.closest('.seg [data-type]');
     if (typeBtn && typeBtn.dataset.type !== draft.type) {
       draft.type = typeBtn.dataset.type;
@@ -491,6 +681,7 @@ export function openEntrySheet(existing = null, carry = null, editCats = false) 
       if (editing) return editCategory(categoryById(catBtn.dataset.cat));
       draft.categoryId = catBtn.dataset.cat;
       grid.querySelectorAll('.cat[data-cat]').forEach((b) => b.classList.toggle('on', b === catBtn));
+      paintRing();
       return;
     }
 
@@ -498,6 +689,7 @@ export function openEntrySheet(existing = null, carry = null, editCats = false) 
     if (dateBtn) {
       draft.date = dateBtn.dataset.date;
       paintDate();
+      paintRing();
       return;
     }
 
@@ -514,6 +706,7 @@ export function openEntrySheet(existing = null, carry = null, editCats = false) 
   dateInput.addEventListener('change', () => {
     if (dateInput.value) draft.date = dateInput.value;
     paintDate();
+    paintRing();
   });
 
   paintAmount();
